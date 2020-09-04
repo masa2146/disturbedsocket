@@ -39,7 +39,7 @@ public class ClientManagerTest {
         new Thread(() -> {
             while (true) {
 //                publisherCommand.publish(EVENT_STATUS, CLIENT_ID);
-                command.hset(CLIENT_ID, "status","1");
+                command.hset(CLIENT_ID, "status", "1");
 
                 try {
                     Thread.sleep(10);
@@ -47,7 +47,7 @@ public class ClientManagerTest {
                     e.printStackTrace();
                 }
             }
-        }).run();
+        }).start();
 
     }
 

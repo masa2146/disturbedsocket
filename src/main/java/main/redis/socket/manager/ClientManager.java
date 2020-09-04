@@ -1,15 +1,11 @@
 package main.redis.socket.manager;
 
-import com.sun.scenario.effect.impl.sw.sse.SSEBlend_SRC_OUTPeer;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisException;
-import io.lettuce.core.RedisURI;
 import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.core.pubsub.RedisPubSubListener;
 import io.lettuce.core.pubsub.StatefulRedisPubSubConnection;
 import io.lettuce.core.pubsub.api.sync.RedisPubSubCommands;
-
-import java.io.IOException;
 
 public class ClientManager {
 
@@ -20,6 +16,9 @@ public class ClientManager {
     private static final String EVENT_CONNECTED = "onConnected";
     private static final String EVENT_DISCONNECTED = "onDisconnected";
     private static final String EVENT_STATUS = "status";
+
+    private static final String INFO_KEY = "info";
+    private static final String STATUS_KEY = "status";
 
 
     public static void main(String[] args) {
@@ -41,21 +40,28 @@ public class ClientManager {
         subscribeCommand = subConnection.sync();
         publisherCommand = pubConnection.sync();
 
+        System.out.println("Connected to Redis");
+        System.out.println("Removing all keys...");
         commands.flushall();
+        System.out.println("Removed all keys...");
 
         subscribeCommand.subscribe(EVENT_CONNECTED, EVENT_STATUS);
 
         new Thread(() -> {
             while (true) {
-                 statusControl();
-//                try{
+                statusControl();
+//                try {
 //                    for (String key : commands.keys("*")) {
-//
-//                        System.out.println("Status: " + commands.hget(key, "status"));
-//                        System.out.println("Info: " + commands.hget(key, "info"));
+//                        String status = commands.hget(key, "status");
+//                        if (status.equals("0")) {
+//                            System.out.println("CLIENT DISCONNECTED. CLIENT ID: " + key);
+//                        } else {
+//                            System.out.println("Status: " + commands.hget(key, "status"));
+//                            System.out.println("Info: " + commands.hget(key, "info"));
+//                        }
 //                    }
 //                    publisherCommand.publish("marmara", "sadasda");
-//                }catch (RedisException e){
+//                } catch (RedisException e) {
 //                    System.out.println("Connection reset by peer");
 //                }
                 try {
@@ -64,23 +70,26 @@ public class ClientManager {
                     e.printStackTrace();
                 }
             }
-        }).run();
+        }).start();
     }
 
     private synchronized void statusControl() {
-        try{
-        for (String key : commands.keys("*")) {
-            if (commands.get(key) != null) {
-                if (commands.hget(key,"status").equals("0")) {
+        try {
+            for (String key : commands.keys("*")) {
+                if (commands.hget(key, STATUS_KEY).equals("0")) {
                     System.out.println("CLIENT DISCONNECTED. CLIENT ID: " + key);
+                    commands.hdel(key, STATUS_KEY, INFO_KEY);
+                    commands.del(key);
+                } else {
+                    System.out.println("Client has been connected with client ID " + key);
+//                    publisherCommand.publish(EVENT_STATUS + "/" + key, "0");
+                    commands.hset(key, STATUS_KEY, "0");
                 }
             }
-            publisherCommand.publish(EVENT_STATUS + "/" + key, "0");
-            commands.set(key, "0");
-        }
 
-        }catch (RedisException e){
-            System.out.println("Connection reset by peer");
+        } catch (RedisException e) {
+            System.out.println("Connection reset by peer ");
+            e.printStackTrace();
         }
     }
 
@@ -89,9 +98,9 @@ public class ClientManager {
         public void message(String channel, String clientId) {
             if (channel.equals(EVENT_CONNECTED)) {
                 publisherCommand.publish(EVENT_CONNECTED + "/" + clientId, "You connected!");
-                commands.hset(clientId, "status", "1");
-                commands.hset(clientId, "info", "{ \"clientId\":\"" + clientId + "\", \"clientName\":\"SampleClientName\" }");
-                System.out.println("ADDED STATUS: ");
+                commands.hset(clientId, STATUS_KEY, "1");
+                commands.hset(clientId, INFO_KEY, "{ \"clientId\":\"" + clientId + "\", \"clientName\":\"SampleClientName\" }");
+                System.out.println("Client Connected. Client Id: " + clientId);
 
                 // trigger add onConnected
             } else if (channel.equals(EVENT_STATUS)) {
